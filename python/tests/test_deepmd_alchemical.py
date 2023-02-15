@@ -36,7 +36,7 @@ def test_deepmd_alchemical_reference(nsteps = 1000, time_step = 0.2, Lambda = 0.
     positions = liquid_water.getPositions()
     
     # Set up the dp_system with the dp_model.    
-    dp_model = DeepPotentialModel(dp_model, dp_model, dp_model)
+    dp_model = DeepPotentialModel(dp_model, dp_model, dp_model, Lambda = 0.5)
     dp_model.setUnitTransformCoefficients(10.0, 964.8792534459, 96.48792534459)
     
     # Set up alchemical simulation for DP
@@ -49,7 +49,7 @@ def test_deepmd_alchemical_reference(nsteps = 1000, time_step = 0.2, Lambda = 0.
             graph2_particles.append(atom.index)
         else:
             graph1_particles.append(atom.index)
-    dp_system = dp_model.createSystem(topology, particles_group_1 = graph1_particles, particles_group_2 = graph2_particles, Lambda = Lambda)
+    dp_system = dp_model.createSystem(topology, particles_group_1 = graph1_particles, particles_group_2 = graph2_particles)
     
     
     integrator = mm.LangevinIntegrator(

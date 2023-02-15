@@ -70,12 +70,11 @@ public:
      * @param force      the DeepmdForce to copy the parameters from
      */
 private:
-    // graph_file 1 and 2 are used for alchemical simulation.
-    std::string graph_file, graph_file_1, graph_file_2;
-    // dp_1 and dp_2 are used for alchemical simulation.
-    DeepPot dp, dp_1, dp_2;
+    std::string graph_file;
+    DeepPot dp;
 
     int natoms, tot_atoms;
+    double lambda = 0.0;
     ENERGYTYPE dener;
     vector<VALUETYPE> dforce;
     vector<VALUETYPE> dvirial;
@@ -89,22 +88,6 @@ private:
     map<string, int> typesIndexMap;
     double forceUnitCoeff, energyUnitCoeff, coordUnitCoeff;
     vector<double> AddedForces;
-    
-    // Parameters for alchemical simulation.
-    bool used4Alchemical = false;
-    double lambda; // U = lambda * U_A + (1 - lambda) * (U_1 + U_2). Where U_A comes from the original graph, U_1 and U_2 come from two alchemical graph.
-    vector<int> atomsIndex4Graph1;
-    vector<int> atomsIndex4Graph2;
-    map<int, vector<VALUETYPE>> dcoord4alchemical;
-    map<int, vector<VALUETYPE>> dbox4alchemical;
-    map<int, vector<int>> dtype4alchemical;
-
-    map<int, ENERGYTYPE> dener4alchemical;
-    map<int, vector<VALUETYPE>> dforce4alchemical;
-    map<int, vector<VALUETYPE>> dvirial4alchemical;
-
-    map<int, int> natoms4alchemical;
-    vector<pair<int, int>> atomsIndexMap4U_B;
 };
 
 } // namespace DeepmdPlugin

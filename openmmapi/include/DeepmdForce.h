@@ -39,13 +39,8 @@
 #include <deepmd/deepmd.hpp>
 #include "internal/windowsExportDeepmd.h"
 
-#ifdef HIGH_PREC
 typedef double VALUETYPE;
 typedef double ENERGYTYPE;
-#else 
-typedef float  VALUETYPE;
-typedef double ENERGYTYPE;
-#endif
 
 using namespace std;
 using deepmd::hpp::DeepPot;
@@ -65,10 +60,9 @@ public:
      * @brief Construct a new Deepmd Force object. Used when running alchemical simulation.
      * 
      * @param GraphFile 
-     * @param GraphFile_1 
-     * @param GraphFile_2 
+     * @param lambda
      */
-    DeepmdForce(const string& GraphFile, const string& GraphFile_1, const string& GraphFile_2);
+    DeepmdForce(const string& GraphFile, const double& lambda);
     ~DeepmdForce();
     
     /**
@@ -172,26 +166,6 @@ public:
      * @return string
      */
     string getTypesMap() const;
-     
-    // For alchemical simulation.
-    /**
-     * @brief Set the Deepmd Force is used for alchemical simulation or not.
-     * 
-     * @param used4Alchemical 
-     */
-    void setAlchemical(const bool used4Alchemical);
-    /**
-     * @brief Set the atoms index list for graph 1 in alchemical simulation.
-     * 
-     * @param atomsIndex 
-     */
-    void setAtomsIndex4Graph1(const vector<int> atomsIndex);
-    /**
-     * @brief Set the atoms index list for graph 2 in alchemical simulation.
-     * 
-     * @param atomsIndex 
-     */
-    void setAtomsIndex4Graph2(const vector<int> atomsIndex);
     /**
      * @brief Set the lambda value for this alchemical simulation.
      * 
@@ -199,44 +173,11 @@ public:
      */
     void setLambda(const double lambda);
     /**
-     * @brief Check whether the Deepmd Force is used for alchemical simulation or not.
-     * 
-     * @return true : used for alchemical simulation. 
-     * @return false : not used for alchemical simulation.
-     */
-    bool alchemical() const {
-        return used4Alchemical;
-    }
-    /**
-     * @brief Get the lambda value for this alchemical simulation.
+     * @brief Get the lambda value for DP force scale weights in simulation.
      * 
      * @return double 
      */
     double getLambda() const;
-    /**
-     * @brief Get the path to first graph for alchemical simulation.
-     * 
-     * @return const string 
-     */
-    const string getGraph1_4Alchemical() const;
-    /**
-     * @brief Get the path to second graph for alchemical simulation.
-     * 
-     * @return const string 
-     */
-    const string getGraph2_4Alchemical() const;
-    /**
-     * @brief Get the atoms index vector for graph 1 in alchemical simulation.
-     * 
-     * @return vector<int> 
-     */
-    vector<int> getAtomsIndex4Graph1() const;
-    /**
-     * @brief Get the atoms index vector for graph 2 in alchemical simulation.
-     * 
-     * @return vector<int> 
-     */
-    vector<int> getAtomsIndex4Graph2() const;
 
     void updateParametersInContext(OpenMM::Context& context);
     bool usesPeriodicBoundaryConditions() const {
@@ -245,9 +186,8 @@ public:
 protected:
     OpenMM::ForceImpl* createImpl() const;
 private:
-    // graph_1 and 2 are used for alchemical simulation.
-    string graph_file, graph_file_1, graph_file_2;
-    bool used4Alchemical = false;
+    string graph_file;
+    double lambda = 1.0;
     bool use_pbc = true;
 
     int numb_types;
@@ -260,12 +200,14 @@ private:
     vector<pair<int, int>> bondsList;
     double coordCoeff, forceCoeff, energyCoeff;
 
-    // Used for alchemical simulation.
-    vector<int> atomsIndex4Graph1;
-    vector<int> atomsIndex4Graph2;
-    double lambda;    
+    // The following parameters are prepared for adaptive dp region.
+    // Especially for the support of zinc-protein simulations with dp-mask.
+    bool fixed_dp_region = true; // By default, it is true. If false, the dp region will be adaptive changed with the selected_atoms and radius4adaptive_dp_region parameters.
+    vector<int> selected_atoms; // atom index that would be appended into the dp region.
+    double radius4adaptive_dp_region = 0.35; // unit in nanometers.
+    bool extend2residues = true; // Extend the selected atom in dp region to the whole residue.
+    vector<string> atom_names4dp_forces; // Only the atoms within these names would be added with dp forces.
 };
-
 } // namespace DeepmdPlugin
 
 #endif /*OPENMM_DEEPMDFORCE_H_*/

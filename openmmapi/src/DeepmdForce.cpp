@@ -44,35 +44,22 @@ inline bool exists(const std::string& name) {
     return (stat (name.c_str(), &buffer) == 0); 
 }
 
-DeepmdForce::DeepmdForce(const string& GraphFile, const string& GraphFile_1, const string& GraphFile_2){
+
+DeepmdForce::DeepmdForce(const string& GraphFile){
     graph_file  = GraphFile;
-    graph_file_1 = GraphFile_1;
-    graph_file_2 = GraphFile_2;
-    //this->used4Alchemical = used4Alchemical;
-    this->used4Alchemical = true;
-    if(used4Alchemical){
-        if (!exists(graph_file_1)){
-            throw OpenMMException("Graph file 1 not found: "+graph_file_1);
-        }
-        if (!exists(graph_file_2)){
-            throw OpenMMException("Graph file 2 not found: "+graph_file_2);
-        }
-    }
     if (!exists(graph_file)){
         throw OpenMMException("Graph file not found: "+graph_file);
     }
     // Initialize dp model
     DeepPot tmp_dp = DeepPot(graph_file);
-    
-    // Extract the model informations first.
     this->numb_types = tmp_dp.numb_types();
     this->cutoff = tmp_dp.cutoff();
     tmp_dp.get_type_map(this->type_map);
 }
 
-DeepmdForce::DeepmdForce(const string& GraphFile){
+DeepmdForce::DeepmdForce(const string& GraphFile, const double& lambda){
     graph_file  = GraphFile;
-    this->used4Alchemical = false;
+    this->lambda = lambda;
     if (!exists(graph_file)){
         throw OpenMMException("Graph file not found: "+graph_file);
     }
@@ -157,45 +144,8 @@ void DeepmdForce::updateParametersInContext(Context& context) {
     return;
 }
 
-void DeepmdForce::setAlchemical(const bool used4Alchemical){
-    this->used4Alchemical = used4Alchemical;
-}
-
-void DeepmdForce::setAtomsIndex4Graph1(const vector<int> atomsIndex){
-    atomsIndex4Graph1.clear();
-    for(auto it = atomsIndex.begin(); it != atomsIndex.end();it++){
-        atomsIndex4Graph1.push_back(*it);
-    }
-}
-
-void DeepmdForce::setAtomsIndex4Graph2(const vector<int> atomsIndex){
-    atomsIndex4Graph2.clear();
-    for(auto it = atomsIndex.begin(); it != atomsIndex.end();it++){
-        atomsIndex4Graph2.push_back(*it);
-    }
-}
-
 void DeepmdForce::setLambda(const double lambda){
     this->lambda = lambda;
 }
 
 double DeepmdForce::getLambda() const {return lambda;}
-
-vector<int> DeepmdForce::getAtomsIndex4Graph1() const {return atomsIndex4Graph1;}
-vector<int> DeepmdForce::getAtomsIndex4Graph2() const {return atomsIndex4Graph2;}
-
-const string DeepmdForce::getGraph1_4Alchemical() const {
-    if(used4Alchemical)
-    return graph_file_1;
-    else{
-        throw OpenMMException("This Deepmd Force is not used for alchemical simulation.");
-    }
-}
-
-const string DeepmdForce::getGraph2_4Alchemical() const {
-    if(used4Alchemical)
-    return graph_file_2;
-    else{
-        throw OpenMMException("This Deepmd Force is not used for alchemical simulation.");
-    }
-}

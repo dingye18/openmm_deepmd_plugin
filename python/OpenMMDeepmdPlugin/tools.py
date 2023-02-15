@@ -85,162 +85,9 @@ def DrawScatter(x, y, name, xlabel="Time", ylabel="Force, unit is KJ/(mol*nm)", 
     return
 
 
-class AlchemicalContext():
-    def __init__(self, alchemical_resid, Lambda, model_file, model1, model2, pdb, box):
-        try:
-            from OpenMMDeepmdPlugin import DeepmdForce
-        except ImportError:
-            print("OpenMMDeepmdPlugin import error.")
-
-        self.alchemical_resid = alchemical_resid
-        self.model = model_file
-        self.model1 = model1
-        self.model2 = model2
-        self.Lambda = Lambda
-        
-        # Construct the system and dp_force.
-        pdb_object = PDBFile(pdb)        
-        topology = pdb_object.topology
-        natoms = topology.getNumAtoms()
-
-        box = [mm.Vec3(box[0], box[1], box[2]), mm.Vec3(box[3], box[4], box[5]), mm.Vec3(box[6], box[7], box[8])] * u.angstroms
-        box = [x.value_in_unit(u.nanometers) for x in box]
-
-        #integrator = mm.VerletIntegrator(1*u.femtoseconds)
-        integrator = mm.LangevinIntegrator(
-                                300*u.kelvin,       # Temperature of heat bath
-                                1.0/u.picoseconds,  # Friction coefficient
-                                0.2*u.femtoseconds, # Time step
-        )
-        platform = mm.Platform.getPlatformByName('CUDA')
-        # Create the system.
-        dp_system = mm.System()
-
-        used4Alchemical = True
-        # Set up the dp force.
-        # Set the dp force for alchemical simulation.
-        dp_force = DeepmdForce(self.model, self.model1, self.model2, used4Alchemical)
-        # Add atom type
-        dp_force.addType(0, element.oxygen.symbol)
-        dp_force.addType(1, element.hydrogen.symbol)
-
-        nHydrogen = 0
-        nOxygen = 0
-
-        graph1_particles = []
-        graph2_particles = []
-
-        for atom in topology.atoms():
-            if int(atom.residue.id) == alchemical_resid:
-                graph2_particles.append(atom.index)
-            else:
-                graph1_particles.append(atom.index)
-
-            if atom.element == element.oxygen:
-                dp_system.addParticle(element.oxygen.mass)
-                dp_force.addParticle(atom.index, element.oxygen.symbol)
-                nOxygen += 1
-                for at in atom.residue.atoms():
-                    topology.addBond(at, atom)
-                    if at.index != atom.index:
-                        dp_force.addBond(atom.index, at.index)
-            elif atom.element == element.hydrogen:
-                dp_system.addParticle(element.hydrogen.mass)
-                dp_force.addParticle(atom.index, element.hydrogen.symbol)
-                nHydrogen += 1
-
-        dp_force.setAtomsIndex4Graph1(graph1_particles)
-        dp_force.setAtomsIndex4Graph2(graph2_particles)
-        dp_force.setLambda(Lambda)
-
-        # Set the units transformation coefficients from openmm to graph input tensors.
-        # First is the coordinates coefficient, which used for transformation from nanometers to graph needed coordinate unit.
-        # Second number is force coefficient, which used for transformation graph output force unit to openmm used unit (kJ/(mol * nm))
-        # Third number is energy coefficient, which used for transformation graph output energy unit to openmm used unit (kJ/mol)
-        dp_force.setUnitTransformCoefficients(10.0, 964.8792534459, 96.48792534459)
-
-        # Add force in dp_system
-        dp_system.addForce(dp_force)
-        self.system = dp_system
-        self.context = mm.Context(self.system, integrator, platform)
-        self.context.setPeriodicBoxVectors(box[0], box[1], box[2])
-        self.topology = topology
-        return
-
-    def getPotentialEnergy(self, positions):
-        self.context.setPositions(positions)
-        state = self.context.getState(getEnergy=True)
-        potential = state.getPotentialEnergy()
-        return potential
-
-class DeepPotentialContext():
-    def __init__(self, model_file, type_list):
-        try:
-            from OpenMMDeepmdPlugin import DeepmdForce
-        except ImportError:
-            print("OpenMMDeepmdPlugin import error.")
-        self.model = model_file
-        integrator = mm.LangevinIntegrator(
-                                0*u.kelvin,       # Temperature of heat bath
-                                1.0/u.picoseconds,  # Friction coefficient
-                                0.2*u.femtoseconds, # Time step
-        )
-
-        dp_force = DeepmdForce(self.model, "", "", False)
-        # Add atom type
-        dp_force.addType(0, element.oxygen.symbol)
-        dp_force.addType(1, element.hydrogen.symbol)
-        
-        platform = mm.Platform.getPlatformByName('CUDA')
-        # Create the system.
-        dp_system = mm.System()
-
-        nOxygen = 0
-        nHydrogen = 0
-        for ii, at in  enumerate(type_list):
-            if at == 0:
-                dp_system.addParticle(element.oxygen.mass)
-                dp_force.addParticle(ii, element.oxygen.symbol)
-                nOxygen += 1
-            elif at == 1:
-                dp_system.addParticle(element.hydrogen.mass)
-                dp_force.addParticle(ii, element.hydrogen.symbol)
-                nHydrogen += 1
-
-        dp_force.setUnitTransformCoefficients(10.0, 964.8792534459, 96.48792534459)
-        dp_system.addForce(dp_force)
-
-        self.system = dp_system
-        self.context = mm.Context(self.system, integrator, platform)
-        return
-
-    def getPotentialEnergy(self, positions):
-        self.context.setPositions(positions)
-        state = self.context.getState(getEnergy=True, enforcePeriodicBox=False)
-        potential = state.getPotentialEnergy()
-        return potential
-    def getForces(self, positions):
-        self.context.setPositions(positions)
-        state = self.context.getState(getForces=True)
-        forces = state.getForces(asNumpy = True)
-        return forces
-    def getPositions(self):
-        state = self.context.getState(getPositions=True)
-        positions = state.getPositions()
-        return positions
-    
-    def getEnergyForcesPositions(self, positions, box):
-        self.context.setPositions(positions)
-        self.context.setPeriodicBoxVectors(box[0], box[1], box[2])
-
-        state = self.context.getState(getPositions=True, getEnergy=True, getForces = True, enforcePeriodicBox = False)
-        potential = state.getPotentialEnergy()
-        forces = state.getForces(asNumpy=True)
-        posi = state.getPositions(asNumpy=True)
-        return potential, forces, posi
 
 class DeepPotentialModel():
-    def __init__(self, model_file, model_file_1 = None, model_file_2 = None) -> None:
+    def __init__(self, model_file, model_file_1 = None, model_file_2 = None, Lambda = 1.0) -> None:
         self.model_file = model_file
         self.dp_force = DeepmdForce(model_file)
         self.cutoff = self.dp_force.getCutoff()
@@ -250,8 +97,13 @@ class DeepPotentialModel():
         self.IsAlchemical = False
         
         if model_file is not None and model_file_1 is not None and model_file_2 is not None:
-            del self.dp_force
-            self.dp_force = DeepmdForce(model_file, model_file_1, model_file_2)
+            if Lambda is None:
+                raise Exception("Lambda is required for alchemical DP")
+            
+            self.dp_force.setLambda(Lambda)
+            
+            self.dp_force_1 = DeepmdForce(model_file_1, 1 - Lambda)
+            self.dp_force_2 = DeepmdForce(model_file_2, 1 - Lambda)
             self.model_file_1 = model_file_1
             self.model_file_2 = model_file_2
             self.IsAlchemical = True
@@ -282,9 +134,13 @@ class DeepPotentialModel():
             energyCoefficient (_type_): Coefficient for energies that transforms the units of the DP-predicted energy from the units used by the DP model to kJ/mol.
         """
         self.dp_force.setUnitTransformCoefficients(coordinatesCoefficient, forceCoefficient, energyCoefficient)
+        if self.IsAlchemical:
+            self.dp_force_1.setUnitTransformCoefficients(coordinatesCoefficient, forceCoefficient, energyCoefficient)
+            self.dp_force_2.setUnitTransformCoefficients(coordinatesCoefficient, forceCoefficient, energyCoefficient)
+            
         return
     
-    def createSystem(self, topology, particleNameLabeler = "element", particles_group_1 = None, particles_group_2 = None, Lambda = None):
+    def createSystem(self, topology, particleNameLabeler = "element", particles_group_1 = None, particles_group_2 = None):
         """_summary_
 
         Args:
@@ -320,16 +176,24 @@ class DeepPotentialModel():
                 raise Exception("particles_group_1 is required for alchemical DP")
             if particles_group_2 is None:
                 raise Exception("particles_group_2 is required for alchemical DP")
-            if Lambda is None:
-                raise Exception("Lambda is required for alchemical DP")
             
             #print(f"{len(particles_group_1)} particles are selected for group 1 in alchemical simulation.")
             #print(f"{len(particles_group_2)} particles are selected for group 2 in alchemical simulation")
             
-            self.dp_force.setAtomsIndex4Graph1(particles_group_1)
-            self.dp_force.setAtomsIndex4Graph2(particles_group_2)
-            self.dp_force.setLambda(Lambda)
+            for atom in topology.atoms():
+                if particleNameLabeler == "element":
+                    atom_type = atom.element.symbol
+                elif particleNameLabeler == "atom_name":
+                    atom_type = atom.name
+                    
+                if atom.index in particles_group_1:
+                    self.dp_force_1.addParticle(atom.index, atom_type)
+                elif atom.index in particles_group_2:
+                    self.dp_force_2.addParticle(atom.index, atom_type)
         
         dp_system.addForce(self.dp_force)
+        if self.IsAlchemical:
+            dp_system.addForce(self.dp_force_1)
+            dp_system.addForce(self.dp_force_2)
         
         return dp_system

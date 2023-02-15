@@ -48,10 +48,11 @@ void CudaCalcDeepmdForceKernel::initialize(const System& system, const DeepmdFor
     graph_file = force.getDeepmdGraphFile();
     type4EachParticle = force.getType4EachParticle();
     typesIndexMap = force.getTypesIndexMap();
-    used4Alchemical = force.alchemical();
     forceUnitCoeff = force.getForceUnitCoefficient();
     energyUnitCoeff = force.getEnergyUnitCoefficient();
     coordUnitCoeff = force.getCoordUnitCoefficient();
+
+    lambda = force.getLambda();
     
     //natoms = system.getNumParticles();
     natoms = type4EachParticle.size();
@@ -59,53 +60,7 @@ void CudaCalcDeepmdForceKernel::initialize(const System& system, const DeepmdFor
 
     // Load the ordinary graph firstly.
     dp = DeepPot(graph_file);
-    if(used4Alchemical){
-        cout<<"Deep Potential Alchemical simulation. Load the other two graphs here."<<endl;
-        graph_file_1 = force.getGraph1_4Alchemical();
-        graph_file_2 = force.getGraph2_4Alchemical();
-        dp_1 = DeepPot(graph_file_1);
-        dp_2 = DeepPot(graph_file_2);
-        lambda = force.getLambda();
-        atomsIndex4Graph1 = force.getAtomsIndex4Graph1();
-        atomsIndex4Graph2 = force.getAtomsIndex4Graph2();
-        natoms4alchemical[1] = atomsIndex4Graph1.size();
-        natoms4alchemical[2] = atomsIndex4Graph2.size();
-        
-        // pair<int, int> stores the atoms index in U_B. This might be useful for force assign.
-        atomsIndexMap4U_B = vector<pair<int,int>>(natoms4alchemical[1] + natoms4alchemical[2]);
-
-        // Initialize the input and output array for alchemical simulation.
-        dener4alchemical[1] = 0.0;
-        dforce4alchemical[1] = vector<VALUETYPE>(natoms4alchemical[1] * 3, 0.);
-        dvirial4alchemical[1] = vector<VALUETYPE>(9, 0.);
-        dcoord4alchemical[1] = vector<VALUETYPE>(natoms4alchemical[1] * 3, 0.);
-        dbox4alchemical[1] = vector<VALUETYPE>(9, 0.);
-        dtype4alchemical[1] = vector<int>(natoms4alchemical[1], 0);
-        
-        for(int ii = 0; ii < natoms4alchemical[1]; ++ii){
-            int index = atomsIndex4Graph1[ii];
-            atomsIndexMap4U_B[index] = make_pair(1, ii);
-            dtype4alchemical[1][ii] = typesIndexMap[type4EachParticle[index]];
-        }
-        
-        dener4alchemical[2] = 0.0;
-        dforce4alchemical[2] = vector<VALUETYPE>(natoms4alchemical[2] * 3, 0.);
-        dvirial4alchemical[2] = vector<VALUETYPE>(9, 0.);
-        dcoord4alchemical[2] = vector<VALUETYPE>(natoms4alchemical[2] * 3, 0.);
-        dbox4alchemical[2] = vector<VALUETYPE>(9, 0.);
-        dtype4alchemical[2] = vector<int>(natoms4alchemical[2], 0);
-        
-        for(int ii = 0; ii < natoms4alchemical[2]; ++ii){
-            int index = atomsIndex4Graph2[ii];
-            atomsIndexMap4U_B[index] = make_pair(2, ii);
-            dtype4alchemical[2][ii] = typesIndexMap[type4EachParticle[index]];
-        }
-
-        if ((natoms4alchemical[1] + natoms4alchemical[2]) != natoms){
-        throw OpenMMException("Wrong atoms number for graph1 and graph2. Summation of atoms number in graph 1 and 2 is not equal to total atoms number.");
-        }
-    }
-
+    
     // Initialize the ordinary input and output array.
     // Initialize the input tensor.
     dener = 0.;
@@ -166,69 +121,18 @@ double CudaCalcDeepmdForceKernel::execute(ContextImpl& context, bool includeForc
         dcoord[ii * 3 + 2] = pos[atom_index][2] * coordUnitCoeff;
     }
     // Assign the input coord for alchemical simulation.
-    if(used4Alchemical){
-        // Set the input coord and box array for graph 1 first.
-        for(int ii = 0; ii < natoms4alchemical[1]; ii ++){
-            int index = atomsIndex4Graph1[ii];
-            dcoord4alchemical[1][ii * 3 + 0] = pos[index][0] * coordUnitCoeff;
-            dcoord4alchemical[1][ii * 3 + 1] = pos[index][1] * coordUnitCoeff;
-            dcoord4alchemical[1][ii * 3 + 2] = pos[index][2] * coordUnitCoeff;
-        }
-        dbox4alchemical[1] = dbox;
-
-        // Set the input coord and box array for graph 2.
-        for(int ii = 0; ii < natoms4alchemical[2]; ii ++){
-            int index = atomsIndex4Graph2[ii];
-            dcoord4alchemical[2][ii * 3 + 0] = pos[index][0] * coordUnitCoeff;
-            dcoord4alchemical[2][ii * 3 + 1] = pos[index][1] * coordUnitCoeff;
-            dcoord4alchemical[2][ii * 3 + 2] = pos[index][2] * coordUnitCoeff;
-        }
-        dbox4alchemical[2] = dbox;
-    }
 
     dp.compute (dener, dforce, dvirial, dcoord, dtype, dbox);
-    
-    if (used4Alchemical){
-        // Compute the first graph.
-        dp_1.compute (dener4alchemical[1], dforce4alchemical[1], dvirial4alchemical[1], dcoord4alchemical[1], dtype4alchemical[1], dbox4alchemical[1]);
-        // Compute the second graph.
-        dp_2.compute (dener4alchemical[2], dforce4alchemical[2], dvirial4alchemical[2], dcoord4alchemical[2], dtype4alchemical[2], dbox4alchemical[2]);
-    }
 
-    if(used4Alchemical){
-        for(int ii = 0; ii < natoms; ii++){
-            // ii is the index of the atom.
-            // Interpolate the alchemical forces.
-            if(atomsIndexMap4U_B[ii].first == 1){
-                // Get the force from ordinary graph and graph_1.
-                int index4U_B = atomsIndexMap4U_B[ii].second;
-                // F = \lambda * (F_A) + (1 - \lambda) * F_1
-                AddedForces[ii * 3 + 0] = (lambda * dforce[ii * 3 + 0] + (1 - lambda) * (dforce4alchemical[1][index4U_B * 3 + 0])) * forceUnitCoeff;
-                AddedForces[ii * 3 + 1] = (lambda * dforce[ii * 3 + 1] + (1 - lambda) * (dforce4alchemical[1][index4U_B * 3 + 1])) * forceUnitCoeff;
-                AddedForces[ii * 3 + 2] = (lambda * dforce[ii * 3 + 2] + (1 - lambda) * (dforce4alchemical[1][index4U_B * 3 + 2])) * forceUnitCoeff;
-            } else if (atomsIndexMap4U_B[ii].first == 2){
-                // Get the force from ordinary graph and graph_2.
-                int index4U_B = atomsIndexMap4U_B[ii].second;
-                // F = \lambda * (F_A) + (1 - \lambda) * F_1
-                AddedForces[ii * 3 + 0] = (lambda * dforce[ii * 3 + 0] + (1 - lambda) * (dforce4alchemical[2][index4U_B * 3 + 0])) * forceUnitCoeff;
-                AddedForces[ii * 3 + 1] = (lambda * dforce[ii * 3 + 1] + (1 - lambda) * (dforce4alchemical[2][index4U_B * 3 + 1])) * forceUnitCoeff;
-                AddedForces[ii * 3 + 2] = (lambda * dforce[ii * 3 + 2] + (1 - lambda) * (dforce4alchemical[2][index4U_B * 3 + 2])) * forceUnitCoeff;
-            }
-        }
-        dener = lambda * dener + (1 - lambda) * (dener4alchemical[1] + dener4alchemical[2]);
-        // Transform the unit from output energy unit to KJ/mol
-        dener = dener * energyUnitCoeff;
-    } else{
-        // Transform the unit from output forces unit to KJ/(mol*nm)
-        for(int ii = 0; ii < natoms; ii ++){
-            int atom_index = dp_particles[ii];
+    // Transform the unit from output forces unit to KJ/(mol*nm)
+    for(int ii = 0; ii < natoms; ii ++){
+        int atom_index = dp_particles[ii];
 
-            AddedForces[atom_index * 3 + 0] = dforce[ii * 3 + 0] * forceUnitCoeff;
-            AddedForces[atom_index * 3 + 1] = dforce[ii * 3 + 1] * forceUnitCoeff;
-            AddedForces[atom_index * 3 + 2] = dforce[ii * 3 + 2] * forceUnitCoeff;
-        }
-        dener = dener * energyUnitCoeff;
+        AddedForces[atom_index * 3 + 0] = lambda * dforce[ii * 3 + 0] * forceUnitCoeff;
+        AddedForces[atom_index * 3 + 1] = lambda * dforce[ii * 3 + 1] * forceUnitCoeff;
+        AddedForces[atom_index * 3 + 2] = lambda * dforce[ii * 3 + 2] * forceUnitCoeff;
     }
+    dener = dener * energyUnitCoeff;
 
     if (includeForces) {
         // Change to OpenMM CUDA context.

@@ -56,7 +56,7 @@ class DeepmdForce : public OpenMM::Force {
 public:
     //DeepmdForce::DeepmdForce(const string& GraphFile, const string& GraphFile_1, const string& GraphFile_2, const bool used4Alchemical);
     DeepmdForce(const string& GraphFile);
-    DeepmdForce(const string& GraphFile, const string& GraphFile_1, const string& GraphFile_2);
+    DeepmdForce(const string& GraphFile, const double& lambda);
 
     void addParticle(const int particleIndex, const string particleType);
     void addType(const int typeIndex, const string Type);
@@ -68,14 +68,6 @@ public:
     double getCutoff() const;
     int getNumberTypes() const;
     string getTypesMap() const;
-
-    /*
-    * Used for alchemical simulation.
-    */
-    void setAlchemical(const bool used4Alchemical);
-    void setAtomsIndex4Graph1(const vector<int> atomsIndex);
-    void setAtomsIndex4Graph2(const vector<int> atomsIndex);
-    void setLambda(const double lambda);
 
     /*
      * Add methods for casting a Force to a DeepmdForce.
