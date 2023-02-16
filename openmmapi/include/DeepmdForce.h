@@ -34,16 +34,20 @@
 
 #include "openmm/Context.h"
 #include "openmm/Force.h"
+#include "internal/windowsExportDeepmd.h"
+#include "Topology.h"
 #include <vector>
 // Include DeepPot.h for DeepPotential model inference.
-#include <deepmd/deepmd.hpp>
-#include "internal/windowsExportDeepmd.h"
+//#include <deepmd/deepmd.hpp>
+#include "deepmd/DeepPot.h"
+
 
 typedef double VALUETYPE;
 typedef double ENERGYTYPE;
 
 using namespace std;
-using deepmd::hpp::DeepPot;
+using namespace deepmd;
+//using deepmd::hpp::DeepPot;
 
 namespace DeepmdPlugin {
 
@@ -167,6 +171,17 @@ public:
      */
     string getTypesMap() const;
     /**
+     * @brief Is the DP region is fixed or adaptively selected.
+     * 
+     * @return bool
+     */
+    bool isFixedRegion() const;
+    vector<int> getCenterAtoms() const;
+    double getRegionRadius() const;
+    vector<string> getAtomNames4DPForces() const;
+    map<string, int> getSelNum4EachType() const;
+    Topology* getTopology() const;
+    /**
      * @brief Set the lambda value for this alchemical simulation.
      * 
      * @param lambda 
@@ -200,13 +215,25 @@ private:
     vector<pair<int, int>> bondsList;
     double coordCoeff, forceCoeff, energyCoeff;
 
-    // The following parameters are prepared for adaptive dp region.
-    // Especially for the support of zinc-protein simulations with dp-mask.
-    bool fixed_dp_region = true; // By default, it is true. If false, the dp region will be adaptive changed with the selected_atoms and radius4adaptive_dp_region parameters.
-    vector<int> selected_atoms; // atom index that would be appended into the dp region.
+    /* The following parameters are prepared for adaptive dp region.
+     Especially for the support of zinc-protein simulations with dp-mask.
+     Adaptive dp region is constructed by following steps:
+     1. Select the **center_atoms** that would be appended into the dp region.
+     2. Select the atoms within the **radius4adaptive_dp_region** from the center atoms.
+     3. Extend the selected atoms to the whole residues.
+     4. Put the selected residues atoms and center atoms into the dp region and dp model, get energy and forces.
+     5. Assign the dp forces to the selected atoms that atom names are in the **atom_names4dp_forces**.
+    */
+
+    // By default, it is true. If false, the dp region will be selected adaptively with the selected_atoms and radius4adaptive_dp_region parameters.
+    bool fixed_dp_region = true;
     double radius4adaptive_dp_region = 0.35; // unit in nanometers.
-    bool extend2residues = true; // Extend the selected atom in dp region to the whole residue.
-    vector<string> atom_names4dp_forces; // Only the atoms within these names would be added with dp forces.
+    // Only the atoms within **atom_names4dp_forces ** would be added in dp forces.
+    vector<int> center_atoms;
+    vector<string> atom_names4dp_forces;
+    map<string, int> sel_num4each_type;
+    Topology* topology;
+
 };
 } // namespace DeepmdPlugin
 

@@ -134,6 +134,19 @@ const vector<pair<int, int>> DeepmdForce::getBondsList() const{
     return bondsList;
 }
 
+void DeepmdForce::setLambda(const double lambda){
+    this->lambda = lambda;
+}
+
+double DeepmdForce::getLambda() const {return lambda;}
+
+// Get parameters for adaptively changed DP region selection.
+bool DeepmdForce::isFixedRegion() const {return fixed_dp_region;}
+vector<int> DeepmdForce::getCenterAtoms() const {return center_atoms;}
+double DeepmdForce::getRegionRadius() const {return radius4adaptive_dp_region;}
+vector<string> DeepmdForce::getAtomNames4DPForces() const {return atom_names4dp_forces;}
+map<string, int> DeepmdForce::getSelNum4EachType() const {return sel_num4each_type;}
+Topology* DeepmdForce::getTopology() const {return topology;}
 
 ForceImpl* DeepmdForce::createImpl() const {
     return new DeepmdForceImpl(*this);
@@ -144,8 +157,3 @@ void DeepmdForce::updateParametersInContext(Context& context) {
     return;
 }
 
-void DeepmdForce::setLambda(const double lambda){
-    this->lambda = lambda;
-}
-
-double DeepmdForce::getLambda() const {return lambda;}

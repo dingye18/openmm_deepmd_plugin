@@ -88,6 +88,17 @@ private:
     map<string, int> typesIndexMap;
     double forceUnitCoeff, energyUnitCoeff, coordUnitCoeff;
     vector<double> AddedForces;
+
+    bool isFixedRegion = true;
+    vector<int> center_atoms;
+    double radius;
+    vector<string> atom_names4dp_forces;
+    map<string, int> sel_num4type;
+    DeepmdPlugin::Topology* topology;
+
+    map<string, vector<int>> cum_sum4type;
+    vector<VALUETYPE> daparam;
+
 };
 
 } // namespace DeepmdPlugin
