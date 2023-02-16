@@ -63,6 +63,7 @@ public:
     void addBond(const int particle1, const int particle2);
     void setPBC(const bool use_pbc);
     void setUnitTransformCoefficients(const double coordCoefficient, const double forceCoefficient, const double energyCoefficient);
+    void setLambda(const double lambda);
 
     // Extract the model info from dp model.    
     double getCutoff() const;

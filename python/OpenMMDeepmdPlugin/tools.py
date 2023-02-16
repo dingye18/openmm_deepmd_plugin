@@ -87,26 +87,13 @@ def DrawScatter(x, y, name, xlabel="Time", ylabel="Force, unit is KJ/(mol*nm)", 
 
 
 class DeepPotentialModel():
-    def __init__(self, model_file, model_file_1 = None, model_file_2 = None, Lambda = 1.0) -> None:
+    def __init__(self, model_file, Lambda = 1.0) -> None:
         self.model_file = model_file
-        self.dp_force = DeepmdForce(model_file)
+        self.dp_force = DeepmdForce(model_file, Lambda)
         self.cutoff = self.dp_force.getCutoff()
         self.numb_types = self.dp_force.getNumberTypes()
         self.type_map_raw = self.dp_force.getTypesMap()
         self.type_map_dict, self.dp_model_types = self.__decode_type_map(self.type_map_raw)
-        self.IsAlchemical = False
-        
-        if model_file is not None and model_file_1 is not None and model_file_2 is not None:
-            if Lambda is None:
-                raise Exception("Lambda is required for alchemical DP")
-            
-            self.dp_force.setLambda(Lambda)
-            
-            self.dp_force_1 = DeepmdForce(model_file_1, 1 - Lambda)
-            self.dp_force_2 = DeepmdForce(model_file_2, 1 - Lambda)
-            self.model_file_1 = model_file_1
-            self.model_file_2 = model_file_2
-            self.IsAlchemical = True
 
         # Set up the atom type
         for atom_type in self.type_map_dict.keys():
@@ -126,7 +113,7 @@ class DeepPotentialModel():
         return type_map_dict, dp_model_types
     
     def setUnitTransformCoefficients(self, coordinatesCoefficient, forceCoefficient, energyCoefficient):
-        """_summary_
+        """ Set the coefficients for transforming the units of the DP-predicted forces and energies to the units used by OpenMM.
 
         Args:
             coordinatesCoefficient (_type_): Coefficient for input coordinates that transforms the units of the coordinates from nanometers to the units used by the DP model.
@@ -134,21 +121,16 @@ class DeepPotentialModel():
             energyCoefficient (_type_): Coefficient for energies that transforms the units of the DP-predicted energy from the units used by the DP model to kJ/mol.
         """
         self.dp_force.setUnitTransformCoefficients(coordinatesCoefficient, forceCoefficient, energyCoefficient)
-        if self.IsAlchemical:
-            self.dp_force_1.setUnitTransformCoefficients(coordinatesCoefficient, forceCoefficient, energyCoefficient)
-            self.dp_force_2.setUnitTransformCoefficients(coordinatesCoefficient, forceCoefficient, energyCoefficient)
             
         return
     
-    def createSystem(self, topology, particleNameLabeler = "element", particles_group_1 = None, particles_group_2 = None):
-        """_summary_
+    def createSystem(self, topology, particleNameLabeler = "element"):
+        """Create a OpenMM system with Deep Potential force.
+            Used for conventional MD simulation. (NVT, NPT, NVE with DP force only etc.)
 
         Args:
             topology (_type_): OpenMM Topology object
             particleNameLabeler (str, optional): labeler of atom type in topology, element or atom_name. Defaults to "element".
-            particles_group_1 (list, optional): list of particle index in group 1. Defaults to None. Used for alchemical free energy calculation.
-            particles_group_2 (list, optional): list of particle index in group 2. Defaults to None. Used for alchemical free energy calculation.
-            Lambda (float, optional): lambda value for alchemical free energy calculation. Defaults to None.
         
         """
         dp_system = mm.System()
@@ -171,29 +153,35 @@ class DeepPotentialModel():
         for bond in topology.bonds():
             self.dp_force.addBond(bond[0].index, bond[1].index)
         
-        if self.IsAlchemical:
-            if particles_group_1 is None:
-                raise Exception("particles_group_1 is required for alchemical DP")
-            if particles_group_2 is None:
-                raise Exception("particles_group_2 is required for alchemical DP")
-            
-            #print(f"{len(particles_group_1)} particles are selected for group 1 in alchemical simulation.")
-            #print(f"{len(particles_group_2)} particles are selected for group 2 in alchemical simulation")
-            
-            for atom in topology.atoms():
+        dp_system.addForce(self.dp_force)
+        return dp_system
+    
+    def addParticlesToDPRegion(self, dp_particles, topology, particleNameLabeler = "element"):
+        """Add particles into DP region.
+            Only the particles in the DP region will be used to calculate the DP force and energy.
+
+        Args:
+            particles (_type_): list of particle index
+            topology (_type_): OpenMM Topology object
+            particleNameLabeler (str, optional): labeler of atom type in topology, element or atom_name. Defaults to "element".
+        """
+        for atom in topology.atoms():
+            if atom.index in dp_particles:
                 if particleNameLabeler == "element":
                     atom_type = atom.element.symbol
                 elif particleNameLabeler == "atom_name":
                     atom_type = atom.name
-                    
-                if atom.index in particles_group_1:
-                    self.dp_force_1.addParticle(atom.index, atom_type)
-                elif atom.index in particles_group_2:
-                    self.dp_force_2.addParticle(atom.index, atom_type)
-        
-        dp_system.addForce(self.dp_force)
-        if self.IsAlchemical:
-            dp_system.addForce(self.dp_force_1)
-            dp_system.addForce(self.dp_force_2)
-        
-        return dp_system
+                self.dp_force.addParticle(atom.index, atom_type)
+
+        return self.dp_force
+    
+    def addCenterParticlesToAdaptiveDPRegion(self, center_particles, topology, particleNameLabeler = "element"):
+        """_summary_
+
+        Args:
+            particles (_type_): list of particle index
+        """
+        pass
+
+        return self.dp_force
+    

@@ -139,7 +139,7 @@ double ReferenceCalcDeepmdForceKernel::execute(ContextImpl& context, bool includ
         AddedForces[atom_index * 3 + 1] = lambda * dforce[ii * 3 + 1] * forceUnitCoeff;
         AddedForces[atom_index * 3 + 2] = lambda * dforce[ii * 3 + 2] * forceUnitCoeff;
     }
-    dener = dener * energyUnitCoeff;
+    dener = lambda * dener * energyUnitCoeff;
 
     if(includeForces){
         for(int ii = 0; ii < tot_atoms; ii ++){

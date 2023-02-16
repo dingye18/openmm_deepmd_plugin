@@ -85,7 +85,7 @@ void CudaCalcDeepmdForceKernel::initialize(const System& system, const DeepmdFor
     cu.setAsCurrent();
     map<string, string> defines;
     defines["FORCES_TYPE"] = "double";
-    networkForces.initialize(cu, 3*natoms, sizeof(double), "networkForces");
+    networkForces.initialize(cu, 3*tot_atoms, sizeof(double), "networkForces");
     CUmodule module = cu.createModule(CudaDeepmdKernelSources::DeepmdForce, defines);
     addForcesKernel = cu.getKernel(module, "addForces");
 }
@@ -132,15 +132,15 @@ double CudaCalcDeepmdForceKernel::execute(ContextImpl& context, bool includeForc
         AddedForces[atom_index * 3 + 1] = lambda * dforce[ii * 3 + 1] * forceUnitCoeff;
         AddedForces[atom_index * 3 + 2] = lambda * dforce[ii * 3 + 2] * forceUnitCoeff;
     }
-    dener = dener * energyUnitCoeff;
+    dener = lambda * dener * energyUnitCoeff;
 
     if (includeForces) {
         // Change to OpenMM CUDA context.
         cu.setAsCurrent();
         networkForces.upload(AddedForces);
         int paddedNumAtoms = cu.getPaddedNumAtoms();
-        void* args[] = {&networkForces.getDevicePointer(), &cu.getForce().getDevicePointer(), &cu.getAtomIndexArray().getDevicePointer(), &natoms, &paddedNumAtoms};
-        cu.executeKernel(addForcesKernel, args, natoms);
+        void* args[] = {&networkForces.getDevicePointer(), &cu.getForce().getDevicePointer(), &cu.getAtomIndexArray().getDevicePointer(), &tot_atoms, &paddedNumAtoms};
+        cu.executeKernel(addForcesKernel, args, tot_atoms);
     }
     return dener;
 }
