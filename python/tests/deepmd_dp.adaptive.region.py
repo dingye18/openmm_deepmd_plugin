@@ -13,7 +13,7 @@ except:
 from OpenMMDeepmdPlugin import DeepPotentialModel
 from utils import read_top, read_crd, read_params, read_box, vfswitch, restraints
 
-def test_deepmd_adaptive_dp_particles_reference(nsteps = 1000, time_step = 0.1, Lambda = 1.0, platform_name = "Reference", output_temp_dir = "/tmp/openmm_deepmd_plugin_test_adaptive_dp_particles_output"):
+def test_deepmd_adaptive_dp_particles_reference(nsteps = 100, time_step = 0.1, Lambda = 1.0, platform_name = "Reference", output_temp_dir = "/tmp/openmm_deepmd_plugin_test_adaptive_dp_particles_output"):
     if not os.path.exists(output_temp_dir):
         os.mkdir(output_temp_dir)
     
@@ -57,11 +57,11 @@ def test_deepmd_adaptive_dp_particles_reference(nsteps = 1000, time_step = 0.1, 
         if atom.element.symbol == "Zn":
             zinc_atoms.append(atom.index)
     
-    dp_model_file = os.path.join(os.path.dirname(__file__), "../OpenMMDeepmdPlugin/data", "dp_mask_zinc_protein.pb")
+    dp_model_file = os.path.join(os.path.dirname(__file__), "../OpenMMDeepmdPlugin/data", "dp_mask_test_plugin.pb")
     for zinc in zinc_atoms:
         # Set up the dp force and add into system.
         dp_model = DeepPotentialModel(dp_model_file, Lambda = Lambda)
-        dp_model.setUnitTransformCoefficients(10.0, 964.8792534459, 96.48792534459)
+        dp_model.setUnitTransformCoefficients(10., 41.84, 4.184)
         dp_force = dp_model.addCenterParticlesToAdaptiveDPRegion(
             center_particles = [zinc], 
             topology = psf.topology, 

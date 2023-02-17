@@ -226,6 +226,12 @@ map<string, vector<int>> SearchAtomsInRegion(vector<Vec3> pos, vector<int> cente
     // Iterate over all atoms to find the residues that locate within the radius of the center atoms.
     vector<int> selected_residues;
     for(int i = 0; i < center_atoms.size(); i++){
+        // Put the residue of center atoms into selected_residues.
+        int res4center_atom = atoms[center_atoms[i]].getResIndex();
+        if(find(selected_residues.begin(), selected_residues.end(), res4center_atom) == selected_residues.end()){
+            selected_residues.push_back(res4center_atom);
+        }
+
         Vec3 center_pos = pos[center_atoms[i]];
         for(auto it = atoms.begin(); it != atoms.end(); it++){
             Vec3 atom_pos = pos[it->second.getIndex()];
@@ -234,12 +240,9 @@ map<string, vector<int>> SearchAtomsInRegion(vector<Vec3> pos, vector<int> cente
             string at_element = it->second.getElement();
             
             if((dist2 < r2) && (at_element != "H")){
-                string at_name = it->second.getName();
-                if(find(atom_names.begin(), atom_names.end(), at_name) != atom_names.end()){
-                    int res_index = it->second.getResIndex();
-                    if(find(selected_residues.begin(), selected_residues.end(), res_index) == selected_residues.end()){
+                int res_index = it->second.getResIndex();
+                if(find(selected_residues.begin(), selected_residues.end(), res_index) == selected_residues.end()){
                         selected_residues.push_back(res_index);
-                    }
                 }
             }
         }
@@ -260,7 +263,6 @@ map<string, vector<int>> SearchAtomsInRegion(vector<Vec3> pos, vector<int> cente
                 selected_atoms[at_element] = vector<int>();
             }
             selected_atoms[at_element].push_back(at.getIndex());
-
             // Check if the dp forces should be added to the atom.
             if(addOrNot.find(at_element) == addOrNot.end()){
                 addOrNot[at_element] = vector<bool>();

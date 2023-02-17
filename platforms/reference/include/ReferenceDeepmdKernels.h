@@ -83,6 +83,7 @@ private:
     vector<int> dtype;
 
     vector<int> dp_particles;
+    vector<string> dp_types;
     map<int, string> type4EachParticle;
     map<string, vector<int>> particleGroup4EachType;
     map<string, int> typesIndexMap;

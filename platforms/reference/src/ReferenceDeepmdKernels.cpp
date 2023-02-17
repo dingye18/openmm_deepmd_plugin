@@ -73,6 +73,16 @@ void ReferenceCalcDeepmdForceKernel::initialize(const System& system, const Deep
     natoms = type4EachParticle.size();
     tot_atoms = system.getNumParticles();
 
+    // Initialize DeepPot.
+    dp = DeepPot(graph_file);
+    string types_str;
+    dp.get_type_map(types_str);
+    std::stringstream ss(types_str);
+    string token;
+    while (getline(ss, token, ' ')){
+        dp_types.push_back(token);
+    }
+
     // Fetch parameters for adaptive DP region.
     isFixedRegion = force.isFixedRegion();
     if (!isFixedRegion){
@@ -98,13 +108,16 @@ void ReferenceCalcDeepmdForceKernel::initialize(const System& system, const Deep
     } else {
         natoms = 0;
         // Fix the order of atom types.
-        for(map<string, int>::iterator it = sel_num4type.begin(); it != sel_num4type.end(); ++it){
-            cum_sum4type[it->first] = vector<int>(2, 0);
-            cum_sum4type[it->first][0] = natoms;
-            natoms += it->second;
-            cum_sum4type[it->first][1] = natoms;
-            for (int i = 0; i < it->second; i++){
-                dtype.push_back(typesIndexMap[it->first]);
+        assert (typesIndexMap.size() == sel_num4type.size());
+        assert (typesIndexMap.size() == dp_types.size());
+        for(int i = 0; i < dp_types.size(); i++){
+            string type_name = dp_types[i];
+            cum_sum4type[type_name] = vector<int>(2, 0);
+            cum_sum4type[type_name][0] = natoms;
+            natoms += sel_num4type[type_name];
+            cum_sum4type[type_name][1] = natoms;
+            for (int j = 0; j < sel_num4type[type_name]; j++){ 
+                dtype.push_back(typesIndexMap[type_name]);
             }
         }
 
@@ -114,10 +127,9 @@ void ReferenceCalcDeepmdForceKernel::initialize(const System& system, const Deep
         dcoord = vector<VALUETYPE>(natoms * 3, 0.);
         dbox = {}; // Empty vector for adaptive region.
         daparam = vector<VALUETYPE>(natoms, 0.);
+        dp_particles = vector<int>(natoms, -1);
     }
 
-    // Initialize DeepPot.
-    dp = DeepPot(graph_file);
     AddedForces = vector<double>(tot_atoms * 3, 0.0);
 
 }
@@ -153,10 +165,14 @@ double ReferenceCalcDeepmdForceKernel::execute(ContextImpl& context, bool includ
         }
         dp.compute (dener, dforce, dvirial, dcoord, dtype, dbox);
 
-    } else {
+    } else {   
+        std::fill(dp_particles.begin(), dp_particles.end(), -1);
+        std::fill(dcoord.begin(), dcoord.end(), 0.);
+        std::fill(daparam.begin(), daparam.end(), 0.);
         
         vector<bool> addForcesSign(natoms, false);
         map<string, vector<bool>> addOrNot; // Whether to add the dp forces for selected atoms. 
+        
         map<string, vector<int>> dp_region_atoms = DeepmdPlugin::SearchAtomsInRegion
         (pos, center_atoms, radius, topology, atom_names4dp_forces, addOrNot);
         
@@ -183,13 +199,16 @@ double ReferenceCalcDeepmdForceKernel::execute(ContextImpl& context, bool includ
                 dcoord[dp_index * 3 + 1] = pos[atom_index][1] * coordUnitCoeff;
                 dcoord[dp_index * 3 + 2] = pos[atom_index][2] * coordUnitCoeff;
                 daparam[dp_index] = 1;
+                dp_particles[dp_index] = atom_index;
                 addForcesSign[dp_index] = addOrNot[atom_type][i];
             }
         }
         vector<VALUETYPE> dfparam = {};
         
-        dp.compute(dener, dforce, dvirial, dcoord, dtype, dfparam, daparam);
-
+        // Calculate energy and forces.
+        dp.compute(dener, dforce, dvirial, dcoord, dtype, dbox, dfparam, daparam);
+        
+        // Filter the forces for atoms that can be add dp force.
         for(int ii = 0; ii < natoms; ii++){
             if (!addForcesSign[ii]){
                 dforce[ii * 3 + 0] = 0.;

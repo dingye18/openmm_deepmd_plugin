@@ -37,6 +37,7 @@
 #include "internal/windowsExportDeepmd.h"
 #include "Topology.h"
 #include <vector>
+#include <sstream>
 // Include DeepPot.h for DeepPotential model inference.
 //#include <deepmd/deepmd.hpp>
 #include "deepmd/DeepPot.h"

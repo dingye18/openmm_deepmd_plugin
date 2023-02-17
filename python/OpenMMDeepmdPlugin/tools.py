@@ -191,6 +191,7 @@ class DeepPotentialModel():
             topology: OpenMM Topology object
             
         """
+        self.dp_force.setAdaptiveRegion(True)
         # Fed the topology information to the DeepmdForce object.
         for chain in topology.chains():
             chainIndex = chain.index
@@ -216,7 +217,12 @@ class DeepPotentialModel():
                     atomName = str(at.name)
                     atomElement = at.element._symbol
                     
+                    # Small hack for Zn
+                    if atomElement == "Zn":
+                        atomElement = "ZN"
+                    
                     self.dp_force.addAtom(resIndex, atomName, atomElement, atomIndex, atomId)
+                        
         # add Center atoms into the DeepmdForce object.
         self.dp_force.setCenterAtoms(center_particles)
         self.dp_force.setRegionRadius(radius)
@@ -226,6 +232,7 @@ class DeepPotentialModel():
             num4type = []
             for type_name in self.dp_model_types:
                 num4type.append(sel_num4each_type[type_name])
+            print(self.dp_model_types, num4type)
             self.dp_force.setSelNum4EachType(self.dp_model_types, num4type)        
 
         return self.dp_force
