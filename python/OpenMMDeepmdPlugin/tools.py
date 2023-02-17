@@ -232,7 +232,6 @@ class DeepPotentialModel():
             num4type = []
             for type_name in self.dp_model_types:
                 num4type.append(sel_num4each_type[type_name])
-            print(self.dp_model_types, num4type)
             self.dp_force.setSelNum4EachType(self.dp_model_types, num4type)        
 
         return self.dp_force

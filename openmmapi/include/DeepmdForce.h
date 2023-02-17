@@ -43,15 +43,15 @@
 #include "deepmd/DeepPot.h"
 
 
-typedef double VALUETYPE;
-typedef double ENERGYTYPE;
 
 using namespace std;
-using namespace deepmd;
+using deepmd::DeepPot;
 //using deepmd::hpp::DeepPot;
 
 namespace DeepmdPlugin {
 
+typedef double VALUETYPE;
+typedef double ENERGYTYPE;
 
 class OPENMM_EXPORT_DEEPMD DeepmdForce : public OpenMM::Force {
 public:
@@ -215,13 +215,13 @@ public:
 protected:
     OpenMM::ForceImpl* createImpl() const;
 private:
-    string graph_file;
+    string graph_file = "";
     double lambda = 1.0;
     bool use_pbc = true;
 
-    int numb_types;
-    string type_map;
-    double cutoff;
+    int numb_types = 0;
+    string type_map = "";
+    double cutoff = 0.;
     
     map<int, string> type4EachParticle;
     map<string, vector<int>> particleGroup4EachType;

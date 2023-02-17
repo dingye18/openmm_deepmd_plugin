@@ -76,6 +76,7 @@ DeepmdForce::~DeepmdForce(){
     type4EachParticle.clear();
     particleGroup4EachType.clear();
     typesIndexMap.clear();
+    delete topology;
 }
 
 

@@ -60,7 +60,19 @@ static Vec3* extractBoxVectors(ContextImpl& context) {
     return (Vec3*) data->periodicBoxVectors;
 }
 
-ReferenceCalcDeepmdForceKernel::~ReferenceCalcDeepmdForceKernel(){return;}
+ReferenceCalcDeepmdForceKernel::~ReferenceCalcDeepmdForceKernel(){
+    dp_particles.clear();
+    dp_types.clear();
+    dvirial.clear();
+    dcoord.clear();
+    dtype.clear();
+    dbox.clear();
+    dforce.clear();
+    if (topology != NULL){
+        delete topology;
+    }
+    return;
+}
 
 void ReferenceCalcDeepmdForceKernel::initialize(const System& system, const DeepmdForce& force) {
     graph_file = force.getDeepmdGraphFile();
@@ -74,27 +86,22 @@ void ReferenceCalcDeepmdForceKernel::initialize(const System& system, const Deep
     tot_atoms = system.getNumParticles();
 
     // Initialize DeepPot.
-    dp = DeepPot(graph_file);
-    string types_str;
-    dp.get_type_map(types_str);
+    this->dp.init(graph_file);
+    string types_str = force.getTypesMap();
     std::stringstream ss(types_str);
     string token;
     while (getline(ss, token, ' ')){
-        dp_types.push_back(token);
+        this->dp_types.push_back(token);
     }
 
-    // Fetch parameters for adaptive DP region.
+    // Check if DP region is defined with fixed particles.
     isFixedRegion = force.isFixedRegion();
-    if (!isFixedRegion){
-        center_atoms = force.getCenterAtoms();
-        radius = force.getRegionRadius();
-        atom_names4dp_forces = force.getAtomNames4DPForces();
-        sel_num4type = force.getSelNum4EachType();
-        topology = force.getTopology();
-    }
-    
+
     // Set up the dtype and input, output arrays.
     if(isFixedRegion){
+        std::cout<<"Using fixed region for DP."<<std::endl;
+        std::cout<<"Atoms Selected for DP Region: "<<natoms<<std::endl;
+        std::cout<<"Total Atoms in System: "<<tot_atoms<<std::endl;
         dener = 0.;
         dforce = vector<VALUETYPE>(natoms * 3, 0.);
         dvirial = vector<VALUETYPE>(9, 0.);
@@ -106,6 +113,12 @@ void ReferenceCalcDeepmdForceKernel::initialize(const System& system, const Deep
             dtype.push_back(typesIndexMap[it->second]);
         }    
     } else {
+        center_atoms = force.getCenterAtoms();
+        radius = force.getRegionRadius();
+        atom_names4dp_forces = force.getAtomNames4DPForces();
+        sel_num4type = force.getSelNum4EachType();
+        topology = force.getTopology();
+
         natoms = 0;
         // Fix the order of atom types.
         assert (typesIndexMap.size() == sel_num4type.size());
@@ -130,7 +143,7 @@ void ReferenceCalcDeepmdForceKernel::initialize(const System& system, const Deep
         dp_particles = vector<int>(natoms, -1);
     }
 
-    AddedForces = vector<double>(tot_atoms * 3, 0.0);
+    //AddedForces = vector<double>(tot_atoms * 3, 0.0);
 
 }
 
@@ -165,7 +178,7 @@ double ReferenceCalcDeepmdForceKernel::execute(ContextImpl& context, bool includ
         }
         dp.compute (dener, dforce, dvirial, dcoord, dtype, dbox);
 
-    } else {   
+    } else {
         std::fill(dp_particles.begin(), dp_particles.end(), -1);
         std::fill(dcoord.begin(), dcoord.end(), 0.);
         std::fill(daparam.begin(), daparam.end(), 0.);
@@ -216,24 +229,27 @@ double ReferenceCalcDeepmdForceKernel::execute(ContextImpl& context, bool includ
                 dforce[ii * 3 + 2] = 0.;
             }
         }
+        // Set dp ener to 0 since it is invalid.
+        dener = 0.;
     }
 
-    // Transform the unit from output forces unit to KJ/(mol*nm)
-    for(int ii = 0; ii < natoms; ii ++){
-        int atom_index = dp_particles[ii];
-        AddedForces[atom_index * 3 + 0] = lambda * dforce[ii * 3 + 0] * forceUnitCoeff;
-        AddedForces[atom_index * 3 + 1] = lambda * dforce[ii * 3 + 1] * forceUnitCoeff;
-        AddedForces[atom_index * 3 + 2] = lambda * dforce[ii * 3 + 2] * forceUnitCoeff;
-    }
-    dener = lambda * dener * energyUnitCoeff;
+    // Add dp forces to the total forces.
+    if (includeForces){
+        for(int ii = 0; ii < natoms; ii ++){
+            int atom_index = dp_particles[ii];
+            if (atom_index == -1) { continue;}
 
-    if(includeForces){
-        for(int ii = 0; ii < tot_atoms; ii ++){
-        force[ii][0] += AddedForces[ii * 3 + 0];
-        force[ii][1] += AddedForces[ii * 3 + 1];
-        force[ii][2] += AddedForces[ii * 3 + 2];
+            force[atom_index][0] += lambda * dforce[ii * 3 + 0] * forceUnitCoeff;
+            force[atom_index][1] += lambda * dforce[ii * 3 + 1] * forceUnitCoeff;
+            force[atom_index][2] += lambda * dforce[ii * 3 + 2] * forceUnitCoeff;
         }
     }
+    if (includeEnergy){
+        dener = lambda * dener * energyUnitCoeff;
+    } else {
+        dener = 0.;
+    }
+    
     // Return energy.
     return dener;
 }
