@@ -70,6 +70,18 @@ public:
     int getNumberTypes() const;
     string getTypesMap() const;
 
+    // Add methods for adaptive DP region selection.
+    bool isFixedRegion() const;
+    void setAdaptiveRegion(const bool& adaptive_region_sign);
+    void setCenterAtoms(const vector<int>& center_atoms);
+    void setRegionRadius(const double& region_radius);
+    void setAtomNames4DPForces(const vector<string>& atom_names);
+    void setSelNum4EachType(const vector<string>& type_names, const vector<int>& sel_num);
+
+    void addChain(int chainIndex, int Id);
+    void addResidue(int chainIndex, string ResName, int ResIndex, int ResId);
+    void addAtom(int resIndex, string AtomName, string AtomElement, int atomIndex, int atomId);
+
     /*
      * Add methods for casting a Force to a DeepmdForce.
     */

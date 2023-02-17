@@ -176,10 +176,23 @@ public:
      * @return bool
      */
     bool isFixedRegion() const;
+    void setAdaptiveRegion(const bool& adaptive_region_sign);
+    void setCenterAtoms(const vector<int>& center_atoms);
+    void setRegionRadius(const double& region_radius);
+    void setAtomNames4DPForces(const vector<string>& atom_names);
+    void setSelNum4EachType(const vector<string>& type_names, const vector<int>& sel_num);
     vector<int> getCenterAtoms() const;
     double getRegionRadius() const;
     vector<string> getAtomNames4DPForces() const;
     map<string, int> getSelNum4EachType() const;
+
+    /**
+    * Get the topology structure from the python generated topology with OpenMM.
+    */
+    void addChain(int chainIndex, int Id);
+    void addResidue(int chainIndex, string ResName, int ResIndex, int ResId);
+    void addAtom(int resIndex, string AtomName, string AtomElement, int atomIndex, int atomId);
+
     Topology* getTopology() const;
     /**
      * @brief Set the lambda value for this alchemical simulation.
@@ -232,7 +245,7 @@ private:
     vector<int> center_atoms;
     vector<string> atom_names4dp_forces;
     map<string, int> sel_num4each_type;
-    Topology* topology;
+    Topology* topology = NULL;
 
 };
 } // namespace DeepmdPlugin

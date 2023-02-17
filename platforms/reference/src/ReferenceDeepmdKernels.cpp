@@ -97,6 +97,7 @@ void ReferenceCalcDeepmdForceKernel::initialize(const System& system, const Deep
         }    
     } else {
         natoms = 0;
+        // Fix the order of atom types.
         for(map<string, int>::iterator it = sel_num4type.begin(); it != sel_num4type.end(); ++it){
             cum_sum4type[it->first] = vector<int>(2, 0);
             cum_sum4type[it->first][0] = natoms;
@@ -112,7 +113,7 @@ void ReferenceCalcDeepmdForceKernel::initialize(const System& system, const Deep
         dvirial = vector<VALUETYPE>(9, 0.);
         dcoord = vector<VALUETYPE>(natoms * 3, 0.);
         dbox = {}; // Empty vector for adaptive region.
-        daparam = vector<int>(natoms, 0.);
+        daparam = vector<VALUETYPE>(natoms, 0.);
     }
 
     // Initialize DeepPot.
@@ -154,42 +155,49 @@ double ReferenceCalcDeepmdForceKernel::execute(ContextImpl& context, bool includ
 
     } else {
         
-        vector<int> addOrNot; // Whether to add the dp forces for selected atoms. 
+        vector<bool> addForcesSign(natoms, false);
+        map<string, vector<bool>> addOrNot; // Whether to add the dp forces for selected atoms. 
         map<string, vector<int>> dp_region_atoms = DeepmdPlugin::SearchAtomsInRegion
         (pos, center_atoms, radius, topology, atom_names4dp_forces, addOrNot);
         
-        for(map<string, vector<int>>::iterator it = dp_region_atoms.begin(); it != dp_region_atoms.end(); ++it){
+        for(map<string, int>::iterator it = sel_num4type.begin(); it != sel_num4type.end(); ++it){
             string atom_type = it->first;
-            vector<int> atom_indices = it->second;
-            int atom_num = atom_indices.size();
-            if (atom_num > sel_num4type[atom_type]){
+            int max_atom_num = it->second;
+            if (dp_region_atoms.find(atom_type) == dp_region_atoms.end()){
+                // Selected atoms of this type are not found in the adaptive region. That's ok for adaptive region.
+                continue;
+            }
+
+            vector<int> sel_atoms4type = dp_region_atoms[atom_type];
+            // Checks whether the number of selected atoms exceeds the maximum number of input atoms allowed
+            int sel_atom_num = sel_atoms4type.size();
+            if (sel_atom_num > max_atom_num){
                 throw OpenMMException("The number of atoms in the adaptive region is larger than the number of atoms selected for DP forces.");
             }
+
             int cum_sum_start = cum_sum4type[atom_type][0];
-            int cum_sum_end = cum_sum4type[atom_type][1];
-            for (int i = 0; i < atom_num; i++){
-                int atom_index = atom_indices[i];
+            for (int i = 0; i < sel_atom_num; i++){
+                int atom_index = sel_atoms4type[i];
                 int dp_index = cum_sum_start + i;
                 dcoord[dp_index * 3 + 0] = pos[atom_index][0] * coordUnitCoeff;
                 dcoord[dp_index * 3 + 1] = pos[atom_index][1] * coordUnitCoeff;
                 dcoord[dp_index * 3 + 2] = pos[atom_index][2] * coordUnitCoeff;
                 daparam[dp_index] = 1;
+                addForcesSign[dp_index] = addOrNot[atom_type][i];
             }
         }
         vector<VALUETYPE> dfparam = {};
         
         dp.compute(dener, dforce, dvirial, dcoord, dtype, dfparam, daparam);
 
-        for(int ii = 0; ii < addOrNot.size(); ii++){
-            if (addOrNot[ii] == 0){
+        for(int ii = 0; ii < natoms; ii++){
+            if (!addForcesSign[ii]){
                 dforce[ii * 3 + 0] = 0.;
                 dforce[ii * 3 + 1] = 0.;
                 dforce[ii * 3 + 2] = 0.;
             }
         }
     }
-    
-    
 
     // Transform the unit from output forces unit to KJ/(mol*nm)
     for(int ii = 0; ii < natoms; ii ++){
@@ -202,7 +210,7 @@ double ReferenceCalcDeepmdForceKernel::execute(ContextImpl& context, bool includ
 
     if(includeForces){
         for(int ii = 0; ii < tot_atoms; ii ++){
-        force[ii][0] += AddedForces[ii * 3 + 0];N
+        force[ii][0] += AddedForces[ii * 3 + 0];
         force[ii][1] += AddedForces[ii * 3 + 1];
         force[ii][2] += AddedForces[ii * 3 + 2];
         }

@@ -47,6 +47,7 @@ inline bool exists(const std::string& name) {
 
 DeepmdForce::DeepmdForce(const string& GraphFile){
     graph_file  = GraphFile;
+    topology = new Topology();
     if (!exists(graph_file)){
         throw OpenMMException("Graph file not found: "+graph_file);
     }
@@ -59,6 +60,7 @@ DeepmdForce::DeepmdForce(const string& GraphFile){
 
 DeepmdForce::DeepmdForce(const string& GraphFile, const double& lambda){
     graph_file  = GraphFile;
+    topology = new Topology();
     this->lambda = lambda;
     if (!exists(graph_file)){
         throw OpenMMException("Graph file not found: "+graph_file);
@@ -142,10 +144,40 @@ double DeepmdForce::getLambda() const {return lambda;}
 
 // Get parameters for adaptively changed DP region selection.
 bool DeepmdForce::isFixedRegion() const {return fixed_dp_region;}
+void DeepmdForce::setAdaptiveRegion(const bool& adaptive_region_sign) {
+    if (adaptive_region_sign){
+        this->fixed_dp_region = false;
+    }
+}
+void DeepmdForce::setCenterAtoms(const vector<int>& center_atoms) {
+    this->center_atoms = center_atoms;
+}
+void DeepmdForce::setRegionRadius(const double& radius4adaptive_dp_region) {
+    this->radius4adaptive_dp_region = radius4adaptive_dp_region;
+}
+void DeepmdForce::setAtomNames4DPForces(const vector<string>& atom_names4dp_forces) {
+    this->atom_names4dp_forces = atom_names4dp_forces;
+}
+void DeepmdForce::setSelNum4EachType(const vector<string>& type_names, const vector<int>& sel_num) {
+    for(int i = 0; i < type_names.size(); i++){
+        sel_num4each_type[type_names[i]] = sel_num[i];
+    }
+}
 vector<int> DeepmdForce::getCenterAtoms() const {return center_atoms;}
 double DeepmdForce::getRegionRadius() const {return radius4adaptive_dp_region;}
 vector<string> DeepmdForce::getAtomNames4DPForces() const {return atom_names4dp_forces;}
 map<string, int> DeepmdForce::getSelNum4EachType() const {return sel_num4each_type;}
+
+void DeepmdForce::addChain(int chainIndex, int Id){
+        topology->addChain(chainIndex, Id);
+}
+void DeepmdForce::addResidue(int chainIndex, string ResName, int ResIndex, int ResId){
+    topology->addResidue(chainIndex, ResName, ResIndex, ResId);
+}
+void DeepmdForce::addAtom(int resIndex, string AtomName, string AtomElement, int atomIndex, int atomId){
+    topology->addAtom(resIndex, AtomName, AtomElement, atomIndex, atomId);
+}
+
 Topology* DeepmdForce::getTopology() const {return topology;}
 
 ForceImpl* DeepmdForce::createImpl() const {

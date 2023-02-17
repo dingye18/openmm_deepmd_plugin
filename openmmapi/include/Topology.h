@@ -1,4 +1,6 @@
 #include <iostream>
+#include <vector>
+#include <algorithm>
 #include "openmm/OpenMMException.h"
 #include "openmm/Context.h"
 #include "openmm/reference/SimTKOpenMMRealType.h"
@@ -11,6 +13,9 @@ using namespace OpenMM;
 namespace DeepmdPlugin {
 
 class OPENMM_EXPORT_DEEPMD Topology;
+class OPENMM_EXPORT_DEEPMD Atom;
+class OPENMM_EXPORT_DEEPMD Residue;
+class OPENMM_EXPORT_DEEPMD Chain;
 
 class OPENMM_EXPORT_DEEPMD Atom{
 public:
@@ -20,11 +25,10 @@ public:
         index = -1;
         ResIndex = -1;
         id = -1;
-        DisWithZinc = 0.0;
         position = Vec3();
     }
     // Initialize the instance with input only.
-    Atom::Atom(const int ResIndex, string name, string element, int index, int id) : name(name), element(element), index(index), ResIndex(ResIndex), id(id){
+    Atom(const int ResIndex, string name, string element, int index, int id) : name(name), element(element), index(index), ResIndex(ResIndex), id(id){
         position = Vec3();
     }
     ~Atom(){};
@@ -36,6 +40,9 @@ public:
     }
     const int getResIndex() const {
         return ResIndex;
+    }
+    const string getName() const{
+        return name;
     }
 
     void setPosition(Vec3 pos){
@@ -96,13 +103,10 @@ public:
         topology = NULL;
         ChainId = -1;
     }
-
     Chain(int ChainIndex, const Topology* top, int ChainId) : ChainIndex(ChainIndex), topology(top), ChainId(ChainId){
         residues = vector<Residue>();
     }
-    
     ~Chain(){};
-
     const vector<Residue> getResidues() const {
         return residues;
     }
@@ -214,10 +218,63 @@ private:
     vector<vector<int> > bonds;
 };
 
-map<string, vector<int>> SearchAtomsInRegion(vector<Vec3> pos, vector<int> center_atoms, double radius, Topology* top, vector<string> atom_names, vector<int> &addOrNot){
-    
+map<string, vector<int>> SearchAtomsInRegion(vector<Vec3> pos, vector<int> center_atoms, double radius, Topology* top, vector<string> atom_names, map<string, vector<bool>> &addOrNot){
+    map<string, vector<int>> selected_atoms;
+    map<int, Atom> atoms = top->getAtoms();
+    double r2 = radius * radius;
 
+    // Iterate over all atoms to find the residues that locate within the radius of the center atoms.
+    vector<int> selected_residues;
+    for(int i = 0; i < center_atoms.size(); i++){
+        Vec3 center_pos = pos[center_atoms[i]];
+        for(auto it = atoms.begin(); it != atoms.end(); it++){
+            Vec3 atom_pos = pos[it->second.getIndex()];
+            Vec3 delta = atom_pos - center_pos;
+            double dist2 = delta.dot(delta);
+            string at_element = it->second.getElement();
+            
+            if((dist2 < r2) && (at_element != "H")){
+                string at_name = it->second.getName();
+                if(find(atom_names.begin(), atom_names.end(), at_name) != atom_names.end()){
+                    int res_index = it->second.getResIndex();
+                    if(find(selected_residues.begin(), selected_residues.end(), res_index) == selected_residues.end()){
+                        selected_residues.push_back(res_index);
+                    }
+                }
+            }
+        }
+    }
 
+    // Iterate over all selected residues and append the atoms in the residues to the selected_atoms.
+    map<int, Residue> residues = top->getResidues();
+    for(int i = 0; i < selected_residues.size(); i++){
+        Residue res = residues[selected_residues[i]];
+        vector<int> res_atoms_index = res.getAtomsIndex();
+        for(int j = 0; j < res_atoms_index.size(); j++){
+            Atom at = atoms[res_atoms_index[j]];
+            string at_element = at.getElement();
+            string at_name = at.getName();
+
+            // Add atom into the selected atoms first.
+            if(selected_atoms.find(at_element) == selected_atoms.end()){
+                selected_atoms[at_element] = vector<int>();
+            }
+            selected_atoms[at_element].push_back(at.getIndex());
+
+            // Check if the dp forces should be added to the atom.
+            if(addOrNot.find(at_element) == addOrNot.end()){
+                addOrNot[at_element] = vector<bool>();
+            }
+            if(find(atom_names.begin(), atom_names.end(), at_name) != atom_names.end()){
+                addOrNot[at_element].push_back(true);
+            }
+            else{
+                addOrNot[at_element].push_back(false);
+            }
+        }
+    }
+
+    return selected_atoms;
 }
 
 }

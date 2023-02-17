@@ -175,13 +175,58 @@ class DeepPotentialModel():
 
         return self.dp_force
     
-    def addCenterParticlesToAdaptiveDPRegion(self, center_particles, topology, particleNameLabeler = "element"):
-        """_summary_
+    def addCenterParticlesToAdaptiveDPRegion(
+        self, 
+        center_particles, 
+        topology, 
+        sel_num4each_type = None,
+        radius = 0.35, 
+        atom_names_to_add_forces = ["CB", "CG", "CD", "CD2", "CE1", 'OE1', 'OE2', 'OD1', 'OD2', 'OH2', 'ND1', "NE2", "SG", "ZN"]
+        ):
+        """Add center particles into adaptive DP region.
+            Put the required information for adaptive DP region into the DeepmdForce object.
 
         Args:
-            particles (_type_): list of particle index
+            center_particles List of atom index: list of particle index
+            topology: OpenMM Topology object
+            
         """
-        pass
+        # Fed the topology information to the DeepmdForce object.
+        for chain in topology.chains():
+            chainIndex = chain.index
+            chainId = chain.id
+            
+            if chainId.isnumeric():
+                self.dp_force.addChain(chainIndex, chainId)
+            else:
+                chainId = chainIndex
+                self.dp_force.addChain(chainIndex, chainId)
+            
+            residues = chain._residues
+            for res in residues:
+                resId = int(res.id)
+                resIndex = res.index
+                resName = str(res.name)
+                
+                self.dp_force.addResidue(chainIndex, resName, resIndex, resId)
+                atoms = res._atoms
+                for at in atoms:
+                    atomIndex = at.index
+                    atomId = int(at.id)
+                    atomName = str(at.name)
+                    atomElement = at.element._symbol
+                    
+                    self.dp_force.addAtom(resIndex, atomName, atomElement, atomIndex, atomId)
+        # add Center atoms into the DeepmdForce object.
+        self.dp_force.setCenterAtoms(center_particles)
+        self.dp_force.setRegionRadius(radius)
+        self.dp_force.setAtomNames4DPForces(atom_names_to_add_forces)
+        
+        if sel_num4each_type is not None:
+            num4type = []
+            for type_name in self.dp_model_types:
+                num4type.append(sel_num4each_type[type_name])
+            self.dp_force.setSelNum4EachType(self.dp_model_types, num4type)        
 
         return self.dp_force
     
