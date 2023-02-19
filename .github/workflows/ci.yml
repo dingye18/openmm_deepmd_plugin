@@ -11,7 +11,7 @@ env:
   BUILD_TYPE: Release
   OPENMM_DIR: /usr/local
   DEEPMD_DIR: /usr/local/libdeepmd_cc/
-  LD_LIBRARY_PATH: /usr/local/libdeepmd_cc/lib:/usr/local/lib:/usr/local/cuda/lib64:/usr/local/cuda/lib64/stubs:/opt/miniconda3/envs/test/lib
+  LD_LIBRARY_PATH: /usr/local/libdeepmd_cc/lib:/usr/local/lib:/usr/local/cuda/lib64:/usr/local/cuda/lib64/stubs
 
 permissions:
   actions: read
