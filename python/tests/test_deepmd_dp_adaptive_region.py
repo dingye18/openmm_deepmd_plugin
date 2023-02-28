@@ -193,5 +193,5 @@ def test_deepmd_adaptive_dp_particles_cuda(nsteps = 100, time_step = 1, Lambda =
         
 if __name__ == "__main__":
     test_deepmd_adaptive_dp_particles_reference(nsteps = 100, Lambda= 1.0)
-    test_deepmd_adaptive_dp_particles_cuda(nsteps = 1000, Lambda= 1.0)
+    test_deepmd_adaptive_dp_particles_cuda(nsteps = 1000 * 1000, Lambda= 1.0)
     

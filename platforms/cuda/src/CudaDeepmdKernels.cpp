@@ -120,14 +120,30 @@ void CudaCalcDeepmdForceKernel::initialize(const System& system, const DeepmdFor
     networkForces.initialize(cu, 3*tot_atoms, sizeof(double), "networkForces");
     CUmodule module = cu.createModule(CudaDeepmdKernelSources::DeepmdForce, defines);
     addForcesKernel = cu.getKernel(module, "addForces");
+
+    nb = &cu.getNonbondedUtilities();
+    if(nb == NULL){
+        std::cout << "nb is NULL" << std::endl;
+        nb = cu.createNonbondedUtilities();
+    }
+    std::cout<<nb->getUseCutoff()<<std::endl;
+    std::cout<<nb->getUsePeriodic()<<std::endl;
+    //nb->initialize(system);
 }
 
 
 double CudaCalcDeepmdForceKernel::execute(ContextImpl& context, bool includeForces, bool includeEnergy) {
     vector<Vec3> pos;
     context.getPositions(pos);
-    Vec3 box[3];
+    
+    std::cout<<"Start to fetch neighbor lists"<<std::endl;
+    singlePairs = nb->getSinglePairs();
+    int elementSize = singlePairs.getElementSize();
+    vector<OpenMM::mm_int2> pairs_list = vector<OpenMM::mm_int2>(elementSize);
+    singlePairs.download(&pairs_list);
+    std::cout<<"pairs_list.size() = "<<pairs_list.size()<<std::endl;
 
+    Vec3 box[3];
     if (isFixedRegion){
         // Set box size.
         if (context.getSystem().usesPeriodicBoundaryConditions()){

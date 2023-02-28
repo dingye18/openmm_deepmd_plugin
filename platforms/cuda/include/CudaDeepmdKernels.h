@@ -55,6 +55,10 @@ private:
     OpenMM::CudaArray networkForces;
     CUfunction addForcesKernel;
 
+    // Used for pair list.
+    OpenMM::CudaArray singlePairs;
+    OpenMM::CudaNonbondedUtilities* nb;
+
     // graph_file 1 and 2 are used for alchemical simulation.
     std::string graph_file;
     // nnp_inter_1 and nnp_inter_2 are used for alchemical simulation.
