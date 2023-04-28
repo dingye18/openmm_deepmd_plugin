@@ -54,7 +54,7 @@ const double energyUnitCoeff = 96.48792534459;
 const double temperature = 300;
 const int randomSeed = 123456;
 
-void referenceDeepmdForce(vector<Vec3> positions, vector<Vec3> box, vector<int> types, vector<Vec3>& force, double& energy, deepmd::DeepPot& dp){
+void referenceDeepmdForce(vector<Vec3> positions, vector<Vec3> box, vector<int> types, vector<Vec3>& force, double& energy, DeepPot& dp){
     
     int natoms = positions.size();
     vector<VALUETYPE> nnp_coords(natoms*3);
@@ -123,7 +123,7 @@ void testDeepmdDynamics(int natoms, vector<string> names, vector<double> coord, 
     context.setVelocitiesToTemperature(temperature, randomSeed);
 
     // Initialize the nnp_inter for comparision.
-    deepmd::DeepPot nnp_inter(graph);
+    DeepPot nnp_inter(graph);
     for (int ii = 0; ii < nsteps; ++ii){
         // Running dynamics 1 step.
         integrator.step(1);
